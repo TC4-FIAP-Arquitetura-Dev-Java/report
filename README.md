@@ -20,8 +20,8 @@ This function:
 
 The function requires the following environment variables:
 
-- `MS_FEEDBACK_BASE_URL`: Base URL for the ms-feedback service (e.g., `http://localhost:9084`)
-- `NOTIFICATION_BASE_URL`: Base URL for the notification service (e.g., `https://notification-780675609467.europe-west1.run.app`)
+- `MS_FEEDBACK_BASE_URL`: Base URL for the ms-feedback service (e.g., `http://ms-feedback-...`)
+- `NOTIFICATION_BASE_URL`: Base URL for the notification service (e.g., `https://notification-...`)
 - `REPORT_EMAIL`: Email address where the report will be sent
 
 ## Local Development
