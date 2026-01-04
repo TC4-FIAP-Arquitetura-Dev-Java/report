@@ -15,21 +15,20 @@ import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.util.Optional;
-
 public class Report implements HttpFunction {
   private static final String MS_FEEDBACK_BASE_URL_ENV = "MS_FEEDBACK_BASE_URL";
   private static final String NOTIFICATION_BASE_URL_ENV = "NOTIFICATION_BASE_URL";
   private static final String REPORT_EMAIL_ENV = "REPORT_EMAIL";
   
-  private static final String DEFAULT_MS_FEEDBACK_BASE_URL = "http://localhost:9084";
-  private static final String DEFAULT_NOTIFICATION_BASE_URL = "https://notification-780675609467.europe-west1.run.app";
-  
   private final HttpClient httpClient;
   private final Gson gson;
 
   public Report() {
-    this.httpClient = HttpClient.newHttpClient();
+    this(HttpClient.newHttpClient());
+  }
+
+  Report(HttpClient httpClient) {
+    this.httpClient = httpClient;
     this.gson = new Gson();
   }
 
@@ -39,10 +38,21 @@ public class Report implements HttpFunction {
     BufferedWriter writer = response.getWriter();
     
     try {
-      // Read environment variables
-      String msFeedbackBaseUrl = getEnvVar(MS_FEEDBACK_BASE_URL_ENV, DEFAULT_MS_FEEDBACK_BASE_URL);
-      String notificationBaseUrl = getEnvVar(NOTIFICATION_BASE_URL_ENV, DEFAULT_NOTIFICATION_BASE_URL);
-      String reportEmail = getEnvVar(REPORT_EMAIL_ENV, null);
+      String msFeedbackBaseUrl = getEnvVar(MS_FEEDBACK_BASE_URL_ENV);
+      String notificationBaseUrl = getEnvVar(NOTIFICATION_BASE_URL_ENV);
+      String reportEmail = getEnvVar(REPORT_EMAIL_ENV);
+      
+      if (msFeedbackBaseUrl == null || msFeedbackBaseUrl.isEmpty()) {
+        response.setStatusCode(500);
+        writer.write("{\"error\": \"MS_FEEDBACK_BASE_URL environment variable is not set\"}");
+        return;
+      }
+      
+      if (notificationBaseUrl == null || notificationBaseUrl.isEmpty()) {
+        response.setStatusCode(500);
+        writer.write("{\"error\": \"NOTIFICATION_BASE_URL environment variable is not set\"}");
+        return;
+      }
       
       if (reportEmail == null || reportEmail.isEmpty()) {
         response.setStatusCode(500);
@@ -50,19 +60,9 @@ public class Report implements HttpFunction {
         return;
       }
 
-      // Extract Authorization header from incoming request
-      Optional<String> authHeader = request.getFirstHeader("Authorization");
-      if (authHeader.isEmpty()) {
-        response.setStatusCode(401);
-        writer.write("{\"error\": \"Authorization header is missing\"}");
-        return;
-      }
-
-      // Get current date in ISO 8601 format
       String currentDate = Instant.now().atZone(java.time.ZoneId.of("UTC"))
           .format(DateTimeFormatter.ISO_INSTANT);
 
-      // Make HTTP POST request to ms-feedback service
       String feedbackUrl = msFeedbackBaseUrl + "/ms-feedback/v1/feedback/report";
       JsonObject requestBody = new JsonObject();
       requestBody.addProperty("date", currentDate);
@@ -71,7 +71,6 @@ public class Report implements HttpFunction {
           .uri(URI.create(feedbackUrl))
           .header("accept", "application/json")
           .header("Content-Type", "application/json")
-          .header("Authorization", authHeader.get())
           .POST(BodyPublishers.ofString(gson.toJson(requestBody)))
           .build();
 
@@ -85,13 +84,9 @@ public class Report implements HttpFunction {
         return;
       }
 
-      // Parse JSON response
       JsonObject feedbackData = JsonParser.parseString(feedbackResponse.body()).getAsJsonObject();
-      
-      // Format response into simple text
       String formattedReport = formatReport(feedbackData);
 
-      // Make HTTP POST request to notification service
       JsonObject notificationBody = new JsonObject();
       notificationBody.addProperty("to", reportEmail);
       notificationBody.addProperty("subject", "Feedback Report");
@@ -113,7 +108,6 @@ public class Report implements HttpFunction {
         return;
       }
 
-      // Return success response
       response.setStatusCode(200);
       response.setContentType("application/json");
       writer.write("{\"message\": \"Report generated and sent successfully\"}");
@@ -124,12 +118,11 @@ public class Report implements HttpFunction {
     }
   }
 
-  private String formatReport(JsonObject feedbackData) {
+  String formatReport(JsonObject feedbackData) {
     StringBuilder report = new StringBuilder();
     report.append("Feedback Report\n");
     report.append("===============\n\n");
 
-    // Format evaluations per day
     if (feedbackData.has("evaluationsPerDay")) {
       JsonArray evaluationsPerDay = feedbackData.getAsJsonArray("evaluationsPerDay");
       report.append("Evaluations per day:\n");
@@ -142,7 +135,6 @@ public class Report implements HttpFunction {
       report.append("\n");
     }
 
-    // Format evaluations per urgency
     if (feedbackData.has("evaluationsPerUrgency")) {
       JsonArray evaluationsPerUrgency = feedbackData.getAsJsonArray("evaluationsPerUrgency");
       report.append("Evaluations per urgency:\n");
@@ -157,9 +149,8 @@ public class Report implements HttpFunction {
     return report.toString();
   }
 
-  private String getEnvVar(String name, String defaultValue) {
-    String value = System.getenv(name);
-    return value != null && !value.isEmpty() ? value : defaultValue;
+  String getEnvVar(String name) {
+    return System.getenv(name);
   }
 }
 

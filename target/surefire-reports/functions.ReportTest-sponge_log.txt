@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: functions.ReportTest
+-------------------------------------------------------------------------------
+Tests run: 15, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.150 s -- in functions.ReportTest
